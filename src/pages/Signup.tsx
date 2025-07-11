@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { authService } from "@/services/authService";
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -40,18 +41,33 @@ const Signup = () => {
 
     setIsLoading(true);
 
-    // Store user name for future use
-    localStorage.setItem('userName', formData.name);
+    try {
+      const { data, error } = await authService.signUp({
+        email: formData.email,
+        password: formData.password,
+        fullName: formData.name,
+        farmLocation: formData.farmLocation
+      });
+      
+      if (error) {
+        throw error;
+      }
 
-    // Simulate signup - replace with actual authentication
-    setTimeout(() => {
       toast({
         title: "Account Created Successfully",
-        description: "Welcome to AgriCure! Please sign in to continue.",
+        description: "Welcome to AgriCure! You can now sign in to your account.",
       });
       navigate("/login");
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      toast({
+        title: "Signup Failed",
+        description: error.message || "Failed to create account",
+        variant: "destructive"
+      });
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleBack = () => {

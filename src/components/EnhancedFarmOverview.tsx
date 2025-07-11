@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { BarChart3, Droplets, Thermometer, Activity, Leaf, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchThingSpeakData, getMockThingSpeakData, ThingSpeakData } from "@/services/thingSpeakService";
+import { recommendationService } from "@/services/recommendationService";
+import { FertilizerRecommendation } from "@/services/supabaseClient";
 
 interface Farm {
   id: string;
@@ -14,18 +16,15 @@ interface Farm {
   soilHealth: number;
 }
 
-interface RecommendationLog {
-  id: string;
-  farmName: string;
-  timestamp: string;
-  primaryFertilizer: string;
-  secondaryFertilizer: string;
-  status: 'applied' | 'pending' | 'scheduled';
+interface EnhancedFarmOverviewProps {
+  user?: any;
 }
 
-const EnhancedFarmOverview = () => {
+const EnhancedFarmOverview = ({ user }: EnhancedFarmOverviewProps) => {
   const [realTimeData, setRealTimeData] = useState<ThingSpeakData | null>(null);
+  const [recommendations, setRecommendations] = useState<FertilizerRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(true);
 
   // Mock farms data
   const farms: Farm[] = [
@@ -34,33 +33,6 @@ const EnhancedFarmOverview = () => {
     { id: '3', name: 'East Field', size: 2.1, unit: 'hectares', lastUpdated: '1 hour ago', soilHealth: 92 }
   ];
 
-  // Mock recommendation logs
-  const recommendationLogs: RecommendationLog[] = [
-    {
-      id: '1',
-      farmName: 'North Field',
-      timestamp: '2025-01-27 14:30',
-      primaryFertilizer: 'NPK 20-10-10',
-      secondaryFertilizer: 'Phosphate Rock',
-      status: 'applied'
-    },
-    {
-      id: '2',
-      farmName: 'South Field',
-      timestamp: '2025-01-26 09:15',
-      primaryFertilizer: 'Urea 46%',
-      secondaryFertilizer: 'Compost',
-      status: 'pending'
-    },
-    {
-      id: '3',
-      farmName: 'East Field',
-      timestamp: '2025-01-25 16:45',
-      primaryFertilizer: 'DAP 18-46-0',
-      secondaryFertilizer: 'Bone Meal',
-      status: 'scheduled'
-    }
-  ];
 
   useEffect(() => {
     const loadData = async () => {
@@ -87,6 +59,26 @@ const EnhancedFarmOverview = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (user) {
+      loadRecommendations();
+    }
+  }, [user]);
+
+  const loadRecommendations = async () => {
+    if (!user) return;
+    
+    setRecommendationsLoading(true);
+    try {
+      const { data, error } = await recommendationService.getRecentRecommendations(user.id, 5);
+      if (error) throw error;
+      setRecommendations(data || []);
+    } catch (error) {
+      console.error('Error loading recommendations:', error);
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  };
   const getHealthScore = (data: ThingSpeakData) => {
     if (!data) return 0;
     
@@ -286,8 +278,56 @@ const EnhancedFarmOverview = () => {
           <CardDescription className="text-sm sm:text-base">Past recommendations and their application status</CardDescription>
         </CardHeader>
         <CardContent className="px-4 sm:px-6">
-          <div className="space-y-4">
-            {recommendationLogs.map((log, index) => (
+          {recommendationsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-grass-600"></div>
+              <span className="ml-2 text-sm">Loading recommendations...</span>
+            </div>
+          ) : recommendations.length > 0 ? (
+            <div className="space-y-4">
+              {recommendations.map((recommendation, index) => (
+                <div 
+                  key={recommendation.id} 
+                  className="flex items-center justify-between p-3 sm:p-4 border border-gray-200 rounded-lg bg-gradient-to-r from-white to-gray-50 hover:shadow-md transition-all duration-300 hover:scale-102"
+                  style={{ animationDelay: `${index * 150}ms` }}
+                >
+                  <div className="flex-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 mb-1">
+                      <h4 className="font-semibold text-sm sm:text-base text-gray-800">{recommendation.field_name}</h4>
+                      <Badge className={`${getStatusColor(recommendation.status)} text-xs w-fit border transition-all duration-200 hover:scale-105`}>
+                        {recommendation.status.charAt(0).toUpperCase() + recommendation.status.slice(1)}
+                      </Badge>
+                    </div>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-1">
+                      Primary: <span className="font-medium">{recommendation.primary_fertilizer}</span>
+                      {recommendation.secondary_fertilizer && (
+                        <> | Secondary: <span className="font-medium">{recommendation.secondary_fertilizer}</span></>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(recommendation.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <Leaf className="h-4 w-4 sm:h-5 sm:w-5 text-grass-600 ml-2 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Leaf className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Recommendations Yet</h3>
+              <p className="text-gray-600 text-sm sm:text-base">
+                Start by creating your first fertilizer recommendation in the ML Recommendations tab.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default EnhancedFarmOverview;
               <div 
                 key={log.id} 
                 className="flex items-center justify-between p-3 sm:p-4 border border-gray-200 rounded-lg bg-gradient-to-r from-white to-gray-50 hover:shadow-md transition-all duration-300 hover:scale-102"

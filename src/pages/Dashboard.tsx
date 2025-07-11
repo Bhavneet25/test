@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import DashboardHeader from "@/components/DashboardHeader";
 import EnhancedFarmOverview from "@/components/EnhancedFarmOverview";
@@ -6,6 +6,11 @@ import RealTimeSoilAnalysis from "@/components/RealTimeSoilAnalysis";
 import EnhancedFertilizerForm from "@/components/EnhancedFertilizerForm";
 import EnhancedFertilizerRecommendations from "@/components/EnhancedFertilizerRecommendations";
 import { predictFertilizer, FERTILIZER_INFO, CROP_TYPES, SOIL_TYPES } from "@/services/fertilizerMLService";
+import { authService } from "@/services/authService";
+import { recommendationService } from "@/services/recommendationService";
+import { UserProfile } from "@/services/supabaseClient";
+import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 
 interface FormData {
   fieldName: string;
@@ -68,9 +73,39 @@ const Dashboard = () => {
   const [formData, setFormData] = useState<FormData | null>(null);
   const [recommendations, setRecommendations] = useState<EnhancedRecommendation | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  
-  // Get user name from localStorage or use default
-  const userName = localStorage.getItem('userName') || 'John Farmer';
+  const [user, setUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const { user: currentUser, error } = await authService.getCurrentUser();
+      
+      if (error || !currentUser) {
+        navigate('/login');
+        return;
+      }
+
+      setUser(currentUser);
+      
+      // Load user profile
+      const { data: profile, error: profileError } = await authService.getUserProfile(currentUser.id);
+      if (!profileError && profile) {
+        setUserProfile(profile);
+      }
+    } catch (error) {
+      console.error('Auth check error:', error);
+      navigate('/login');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const generateEnhancedRecommendations = async (data: FormData): Promise<EnhancedRecommendation> => {
     const pH = parseFloat(data.soilPH);
@@ -217,16 +252,75 @@ const Dashboard = () => {
     try {
       const enhancedRecommendations = await generateEnhancedRecommendations(data);
       setRecommendations(enhancedRecommendations);
+      
+      // Save recommendation to database
+      if (user) {
+        const recommendationData = {
+          user_id: user.id,
+          field_name: data.fieldName,
+          field_size: parseFloat(data.fieldSize),
+          field_size_unit: data.sizeUnit,
+          crop_type: data.cropType,
+          soil_type: data.soilType,
+          soil_ph: parseFloat(data.soilPH),
+          nitrogen: parseFloat(data.nitrogen),
+          phosphorus: parseFloat(data.phosphorus),
+          potassium: parseFloat(data.potassium),
+          temperature: parseFloat(data.temperature),
+          humidity: parseFloat(data.humidity),
+          soil_moisture: parseFloat(data.soilMoisture),
+          primary_fertilizer: enhancedRecommendations.primaryFertilizer.name,
+          secondary_fertilizer: enhancedRecommendations.secondaryFertilizer.name,
+          ml_prediction: enhancedRecommendations.mlPrediction.fertilizer,
+          confidence_score: enhancedRecommendations.mlPrediction.confidence,
+          cost_estimate: enhancedRecommendations.costEstimate.total,
+          status: 'pending' as const
+        };
+
+        const { error: saveError } = await recommendationService.createRecommendation(recommendationData);
+        if (saveError) {
+          console.error('Error saving recommendation:', saveError);
+          toast({
+            title: "Warning",
+            description: "Recommendation generated but not saved to history",
+            variant: "destructive"
+          });
+        }
+      }
     } catch (error) {
       console.error('Error generating recommendations:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate recommendations",
+        variant: "destructive"
+      });
     } finally {
       setIsGenerating(false);
     }
   };
 
+  const handleProfileUpdate = (profile: UserProfile) => {
+    setUserProfile(profile);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-grass-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <DashboardHeader userName={userName} />
+      <DashboardHeader 
+        user={user} 
+        userProfile={userProfile} 
+        onProfileUpdate={handleProfileUpdate}
+      />
       
       <div className="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
         <div className="mb-4 sm:mb-8">
@@ -250,7 +344,7 @@ const Dashboard = () => {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4 sm:space-y-6">
-            <EnhancedFarmOverview />
+            <EnhancedFarmOverview user={user} />
           </TabsContent>
 
           <TabsContent value="soil-analysis" className="space-y-4 sm:space-y-6">

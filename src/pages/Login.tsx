@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { authService } from "@/services/authService";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -18,21 +19,30 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Extract name from email for demo purposes
-    const userName = email.split('@')[0].replace(/[^a-zA-Z\s]/g, '').replace(/\b\w/g, l => l.toUpperCase()) || 'Farmer';
-    
-    // Store user name in localStorage for dashboard use
-    localStorage.setItem('userName', userName);
+    try {
+      const { data, error } = await authService.signIn({ email, password });
+      
+      if (error) {
+        throw error;
+      }
 
-    // Simulate login - replace with actual authentication
-    setTimeout(() => {
+      if (data.user) {
+        toast({
+          title: "Login Successful",
+          description: "Welcome back!",
+        });
+        navigate("/dashboard");
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
       toast({
-        title: "Login Successful",
-        description: `Welcome back, ${userName}!`,
+        title: "Login Failed",
+        description: error.message || "Invalid email or password",
+        variant: "destructive"
       });
-      navigate("/dashboard");
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleBack = () => {
