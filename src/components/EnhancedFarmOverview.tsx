@@ -328,31 +328,3 @@ const EnhancedFarmOverview = ({ user }: EnhancedFarmOverviewProps) => {
 };
 
 export default EnhancedFarmOverview;
-              <div 
-                key={log.id} 
-                className="flex items-center justify-between p-3 sm:p-4 border border-gray-200 rounded-lg bg-gradient-to-r from-white to-gray-50 hover:shadow-md transition-all duration-300 hover:scale-102"
-                style={{ animationDelay: `${index * 150}ms` }}
-              >
-                <div className="flex-1">
-                  <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 mb-1">
-                    <h4 className="font-semibold text-sm sm:text-base text-gray-800">{log.farmName}</h4>
-                    <Badge className={`${getStatusColor(log.status)} text-xs w-fit border transition-all duration-200 hover:scale-105`}>
-                      {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
-                    </Badge>
-                  </div>
-                  <p className="text-xs sm:text-sm text-gray-600 mb-1">
-                    Primary: <span className="font-medium">{log.primaryFertilizer}</span> | Secondary: <span className="font-medium">{log.secondaryFertilizer}</span>
-                  </p>
-                  <p className="text-xs text-gray-500">{log.timestamp}</p>
-                </div>
-                <Leaf className="h-4 w-4 sm:h-5 sm:w-5 text-grass-600 ml-2 animate-pulse" />
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-export default EnhancedFarmOverview;
